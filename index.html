@@ -90,7 +90,11 @@
   .info{font-size:14px;color:var(--muted);margin-top:8px}
   .medadmin{display:flex;gap:8px;align-items:center;margin-bottom:8px}
   .medadmin input{min-height:42px;padding:8px 10px}
-  .medadmin .n{flex:2} .medadmin .d{flex:1}
+  .medadmin{flex-wrap:wrap}
+  .medadmin .n{flex:1 1 100%} .medadmin .d{flex:1} .medadmin .u{flex:1;min-height:42px;padding:6px} .medadmin .k{flex:0 0 64px;min-height:42px;padding:6px}
+  .medadmin + .medadmin{border-top:1px solid var(--line);padding-top:8px}
+  .grp{font-size:14px;font-weight:650;color:var(--pri);margin:6px 0 2px}
+  .grp ~ .grp{margin-top:14px}
   .medadmin button{border:0;background:var(--warn-soft);color:var(--warn);border-radius:10px;width:42px;height:42px;font-size:18px}
 </style>
 </head>
@@ -116,10 +120,10 @@
     </div>
     <div class="card">
       <h2>Einnahme eintragen</h2>
-      <label for="mSel">Medikament</label>
+      <label for="mSel">Medikament / Supplement</label>
       <select id="mSel"></select>
       <div class="row">
-        <div><label for="mDose">Dosis (mg)</label><input id="mDose" type="number" inputmode="decimal" step="any" min="0"></div>
+        <div><label for="mDose" id="mDoseLab">Dosis (mg)</label><input id="mDose" type="number" inputmode="decimal" step="any" min="0"></div>
         <div><label for="mTime">Uhrzeit</label><input id="mTime" type="time"></div>
       </div>
       <button class="btn" id="mSave">Einnahme speichern</button>
@@ -132,6 +136,10 @@
 
   <!-- ALKOHOL -->
   <section class="tab" id="tab-alk">
+    <div class="card">
+      <h2>Getrunken an diesem Tag</h2>
+      <div id="alkList"></div>
+    </div>
     <div class="card">
       <h2>Alkohol eintragen</h2>
       <label for="aType">Getränk</label>
@@ -152,10 +160,6 @@
         <div><label for="aTime">Uhrzeit</label><input id="aTime" type="time"></div>
       </div>
       <button class="btn" id="aSave">Alkohol speichern</button>
-    </div>
-    <div class="card">
-      <h2>Getrunken an diesem Tag</h2>
-      <div id="alkList"></div>
     </div>
   </section>
 
@@ -197,9 +201,10 @@
       <div class="info">Die CSV-Datei kannst du z. B. ausdrucken oder dem Arzt mitbringen.</div>
     </div>
     <div class="card">
-      <h2>Meine Medikamente</h2>
+      <h2>Meine Medikamente &amp; Supplemente</h2>
+      <div class="info" style="margin:0 0 10px">Name · Dosis · Einheit · 💊 Medikament / 🌿 Supplement</div>
       <div id="medAdmin"></div>
-      <button class="btn sec" id="medAdd">+ Medikament hinzufügen</button>
+      <button class="btn sec" id="medAdd">+ Eintrag hinzufügen</button>
       <button class="btn" id="medAdminSave">Liste speichern</button>
     </div>
   </section>
@@ -232,7 +237,14 @@
     {id:'zopiclon',    name:'Zopiclon',    dose:7.5},
     {id:'torasemid',   name:'Torasemid',   dose:10},
     {id:'metamizol',   name:'Metamizol',   dose:500},
+  ].map(m=>({...m, unit:'mg', kind:'med'}));
+  const DEFAULT_SUPPS = [
+    {id:'vitd3k2',   name:'Vitamin D3 + K2', dose:1, unit:'Stück', kind:'supp'},
+    {id:'magnesium', name:'Magnesium',       dose:1, unit:'Stück', kind:'supp'},
   ];
+  const UNITS = ['mg','µg','IE','g','ml','Stück','Tropfen'];
+  const unitOf = m => m.unit || 'mg';
+  const amount = (dose, unit) => `${fmtNum(dose)} ${unit}`;
   const MOODS = {1:'Sehr schlecht',2:'Schlecht',3:'Mittel',4:'Gut',5:'Sehr gut'};
   const MOOD_EMO = {1:'😣',2:'🙁',3:'😐',4:'🙂',5:'😄'};
 
@@ -241,8 +253,14 @@
   function load(){
     try { db = JSON.parse(localStorage.getItem(KEY)); } catch(e){ db = null; }
     if(!db || typeof db !== 'object') db = {};
-    db.meds   ??= DEFAULT_MEDS.slice();
-    db.intake ??= [];   // {id, date, time, medId, name, dose}
+    db.meds   ??= DEFAULT_MEDS.concat(DEFAULT_SUPPS);
+    // Bestehende Daten: Einheit/Art nachtragen, Supplemente einmalig ergänzen
+    db.meds.forEach(m=>{ m.unit ??= 'mg'; m.kind ??= 'med'; });
+    if(!db.suppsAdded){
+      DEFAULT_SUPPS.forEach(sp=>{ if(!db.meds.some(m=>m.id===sp.id)) db.meds.push({...sp}); });
+      db.suppsAdded = true; localStorage.setItem(KEY, JSON.stringify(db));
+    }
+    db.intake ??= [];   // {id, date, time, medId, name, dose, unit}
     db.alcohol??= [];   // {id, date, time, type, name, unit, count}
     db.mood   ??= {};   // date -> {score, note}
     db.lastBackup ??= null;
@@ -299,28 +317,36 @@
   // ---------- Medikamente ----------
   function renderMedSelect(){
     const sel = $('#mSel'), cur = sel.value;
-    sel.innerHTML = db.meds.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} (${fmtNum(m.dose)} mg)</option>`).join('');
+    const opt = m=>`<option value="${esc(m.id)}">${esc(m.name)} (${amount(m.dose, unitOf(m))})</option>`;
+    const meds = db.meds.filter(m=>m.kind!=='supp'), supps = db.meds.filter(m=>m.kind==='supp');
+    sel.innerHTML = (meds.length?`<optgroup label="Medikamente">${meds.map(opt).join('')}</optgroup>`:'') +
+                    (supps.length?`<optgroup label="Nahrungsergänzung">${supps.map(opt).join('')}</optgroup>`:'');
     if(db.meds.some(m=>m.id===cur)) sel.value = cur;
     syncDose();
   }
   function syncDose(){
     const m = db.meds.find(x=>x.id===$('#mSel').value);
     $('#mDose').value = m ? m.dose : '';
+    $('#mDoseLab').textContent = `Dosis (${m ? unitOf(m) : 'mg'})`;
   }
   $('#mSel').onchange = syncDose;
 
   function addIntake(med, dose, time){
-    db.intake.push({id:uid(), date:day, time, medId:med.id, name:med.name, dose:Number(dose)});
+    db.intake.push({id:uid(), date:day, time, medId:med.id, name:med.name, dose:Number(dose), unit:unitOf(med)});
     changed(); renderMed();
   }
   function renderMed(){
     const todays = db.intake.filter(e=>e.date===day).sort((a,b)=>a.time.localeCompare(b.time));
-    $('#medQuick').innerHTML = db.meds.map(m=>{
+    const quick = m=>{
       const n = todays.filter(e=>e.medId===m.id).length;
       return `<div class="medquick ${n?'done':''}">
-        <div class="nm"><b>${esc(m.name)}</b><small>${fmtNum(m.dose)} mg${n?` · ${n}× eingetragen`:''}</small></div>
+        <div class="nm"><b>${esc(m.name)}</b><small>${amount(m.dose, unitOf(m))}${n?` · ${n}× eingetragen`:''}</small></div>
         <button data-id="${esc(m.id)}">${n?'✓ nochmal':'Eingenommen'}</button></div>`;
-    }).join('') || '<div class="empty">Keine Medikamente angelegt (unter „Mehr“).</div>';
+    };
+    const qm = db.meds.filter(m=>m.kind!=='supp'), qs = db.meds.filter(m=>m.kind==='supp');
+    $('#medQuick').innerHTML = (qm.length?`<div class="grp">💊 Medikamente</div>${qm.map(quick).join('')}`:'') +
+      (qs.length?`<div class="grp">🌿 Nahrungsergänzung</div>${qs.map(quick).join('')}`:'')
+      || '<div class="empty">Keine Medikamente angelegt (unter „Mehr“).</div>';
     $('#medQuick').querySelectorAll('button').forEach(b=>b.onclick=()=>{
       const m = db.meds.find(x=>x.id===b.dataset.id);
       addIntake(m, m.dose, day===today() ? nowTime() : ($('#mTime').value || '08:00'));
@@ -328,7 +354,7 @@
     });
     $('#medList').innerHTML = todays.length ? todays.map(e=>`
       <div class="entry"><span class="t">${esc(e.time)}</span>
-      <span class="x">${esc(e.name)} – ${fmtNum(e.dose)} mg</span>
+      <span class="x">${esc(e.name)} – ${amount(e.dose, e.unit||'mg')}</span>
       <button class="del" data-id="${e.id}" aria-label="Löschen">🗑</button></div>`).join('')
       : '<div class="empty">Noch nichts eingetragen.</div>';
     $('#medList').querySelectorAll('.del').forEach(b=>b.onclick=()=>{
@@ -405,7 +431,7 @@
       const mood = db.mood[iso];
       if(!meds.length && !alk.length && !mood) continue;
       out.push(`<div class="histday"><h3>${esc(fmtDay(iso,false))}${mood&&mood.score?' '+MOOD_EMO[mood.score]:''}</h3>
-        ${meds.map(e=>`<div class="line"><span class="lab">💊 ${esc(e.time)}</span> ${esc(e.name)} ${fmtNum(e.dose)} mg</div>`).join('')}
+        ${meds.map(e=>`<div class="line"><span class="lab">💊 ${esc(e.time)}</span> ${esc(e.name)} ${amount(e.dose, e.unit||'mg')}</div>`).join('')}
         ${alk.length?`<div class="line"><span class="lab">🍺 </span>${alk.map(e=>esc(alkText(e))).join(' · ')}</div>`:''}
         ${mood?`<div class="line"><span class="lab">🙂 </span>${mood.score?esc(MOODS[mood.score]):''}${mood.note?(mood.score?' – ':'')+esc(mood.note):''}</div>`:''}
       </div>`);
@@ -420,17 +446,19 @@
     $('#medAdmin').innerHTML = adminDraft.map((m,i)=>`
       <div class="medadmin">
         <input class="n" data-i="${i}" data-f="name" value="${esc(m.name)}" placeholder="Name">
-        <input class="d" data-i="${i}" data-f="dose" type="number" inputmode="decimal" step="any" value="${m.dose}" placeholder="mg">
+        <input class="d" data-i="${i}" data-f="dose" type="number" inputmode="decimal" step="any" value="${m.dose}" placeholder="Dosis">
+        <select class="u" data-i="${i}" data-f="unit">${UNITS.map(u=>`<option${u===unitOf(m)?' selected':''}>${u}</option>`).join('')}</select>
+        <select class="k" data-i="${i}" data-f="kind"><option value="med"${m.kind!=='supp'?' selected':''}>💊</option><option value="supp"${m.kind==='supp'?' selected':''}>🌿</option></select>
         <button data-i="${i}" aria-label="Entfernen">✕</button>
       </div>`).join('');
-    $('#medAdmin').querySelectorAll('input').forEach(inp=>inp.oninput=()=>{
+    $('#medAdmin').querySelectorAll('input,select').forEach(inp=>inp.oninput=inp.onchange=()=>{
       adminDraft[inp.dataset.i][inp.dataset.f] = inp.dataset.f==='dose' ? Number(inp.value) : inp.value;
     });
     $('#medAdmin').querySelectorAll('button').forEach(b=>b.onclick=()=>{
       adminDraft.splice(Number(b.dataset.i),1); renderMedAdmin(true);
     });
   }
-  $('#medAdd').onclick = () => { adminDraft.push({id:uid(), name:'', dose:0}); renderMedAdmin(true); };
+  $('#medAdd').onclick = () => { adminDraft.push({id:uid(), name:'', dose:1, unit:'mg', kind:'med'}); renderMedAdmin(true); };
   $('#medAdminSave').onclick = () => {
     const clean = adminDraft.filter(m=>m.name.trim()).map(m=>({...m, name:m.name.trim(), dose:Number(m.dose)||0}));
     db.meds = clean; changed(); renderMedSelect(); renderMed(); renderMedAdmin(); toast('Medikamentenliste gespeichert');
@@ -500,7 +528,7 @@
   $('#csvSave').onclick = () => {
     const q = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
     const rows = [['Datum','Uhrzeit','Art','Bezeichnung','Menge','Einheit','Befinden','Notiz']];
-    db.intake.forEach(e=>rows.push([e.date,e.time,'Medikament',e.name,fmtNum(e.dose),'mg','','']));
+    db.intake.forEach(e=>{ const m=db.meds.find(x=>x.id===e.medId); rows.push([e.date,e.time,m&&m.kind==='supp'?'Supplement':'Medikament',e.name,fmtNum(e.dose),e.unit||'mg','','']); });
     db.alcohol.forEach(e=>rows.push([e.date,e.time,'Alkohol',e.type+(e.name?' ('+e.name+')':''),fmtNum(e.count),e.unit,'','']));
     Object.entries(db.mood).forEach(([d,m])=>rows.push([d,'','Befinden','','','',m.score?`${m.score} – ${MOODS[m.score]}`:'',m.note||'']));
     rows.splice(1, rows.length, ...rows.slice(1).sort((a,b)=>(a[0]+a[1]).localeCompare(b[0]+b[1])));
