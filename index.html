@@ -114,6 +114,10 @@
   <!-- MEDIKAMENTE -->
   <section class="tab active" id="tab-med">
     <div class="card">
+      <h2>Eingenommen an diesem Tag</h2>
+      <div id="medList"></div>
+    </div>
+    <div class="card">
       <h2>Schnell eintragen</h2>
       <div id="medQuick"></div>
       <div class="info">Tippen = jetzt eingenommen, mit der üblichen Dosis.</div>
@@ -127,10 +131,6 @@
         <div><label for="mTime">Uhrzeit</label><input id="mTime" type="time"></div>
       </div>
       <button class="btn" id="mSave">Einnahme speichern</button>
-    </div>
-    <div class="card">
-      <h2>Eingenommen an diesem Tag</h2>
-      <div id="medList"></div>
     </div>
   </section>
 
@@ -165,6 +165,10 @@
 
   <!-- BEFINDEN -->
   <section class="tab" id="tab-mood">
+    <div class="card">
+      <h2>Gespeichert für diesen Tag</h2>
+      <div id="moodSaved"></div>
+    </div>
     <div class="card">
       <h2>Wie geht es dir an diesem Tag?</h2>
       <div class="moods" id="moods">
@@ -367,7 +371,7 @@
     const dose = $('#mDose').value, time = $('#mTime').value || nowTime();
     if(!m) return toast('Bitte Medikament wählen');
     if(!(Number(dose) > 0)) return toast('Bitte Dosis angeben');
-    addIntake(m, dose, time); toast('Einnahme gespeichert'); syncDose();
+    addIntake(m, dose, time); toast('Einnahme gespeichert'); syncDose(); window.scrollTo({top:0,behavior:'smooth'});
   };
 
   // ---------- Alkohol ----------
@@ -380,7 +384,7 @@
     if(!(count>0)) return toast('Bitte Anzahl angeben');
     db.alcohol.push({id:uid(), date:day, time:$('#aTime').value || nowTime(),
       type:$('#aType').value, name:$('#aName').value.trim(), unit:aUnit, count});
-    changed(); renderAlk(); toast('Alkohol gespeichert');
+    changed(); renderAlk(); toast('Alkohol gespeichert'); window.scrollTo({top:0,behavior:'smooth'});
     $('#aName').value=''; $('#aCount').value=1;
   };
   function alkText(e){
@@ -408,7 +412,16 @@
     $('#moodText').textContent = score ? MOODS[score] : 'Tippe auf ein Gesicht';
   }
   $('#moods').querySelectorAll('button').forEach(b=>b.onclick=()=>setMoodUI(Number(b.dataset.v)));
+  function renderMoodSaved(){
+    const m = db.mood[day];
+    $('#moodSaved').innerHTML = m ? `<div class="entry"><span class="x">${m.score?`<span style="font-size:26px;vertical-align:middle">${MOOD_EMO[m.score]}</span> <b>${esc(MOODS[m.score])}</b>`:''}${m.note?`<div style="margin-top:4px;white-space:pre-wrap">${esc(m.note)}</div>`:''}</span>
+      <button class="del" aria-label="Löschen">🗑</button></div>` : '<div class="empty">Noch nichts eingetragen.</div>';
+    const d = $('#moodSaved .del');
+    if(d) d.onclick = () => { if(!confirm('Befinden für diesen Tag löschen?')) return;
+      delete db.mood[day]; changed(); renderMood(); };
+  }
   function renderMood(){
+    renderMoodSaved();
     const m = db.mood[day];
     setMoodUI(m ? m.score : null);
     $('#moodNote').value = m ? (m.note||'') : '';
@@ -417,7 +430,7 @@
     const note = $('#moodNote').value.trim();
     if(!moodScore && !note) return toast('Bitte Gesicht wählen oder Notiz schreiben');
     db.mood[day] = {score:moodScore, note};
-    changed(); toast('Befinden gespeichert');
+    changed(); renderMoodSaved(); toast('Befinden gespeichert'); window.scrollTo({top:0,behavior:'smooth'});
   };
 
   // ---------- Verlauf ----------
