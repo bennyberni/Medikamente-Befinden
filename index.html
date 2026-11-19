@@ -101,7 +101,7 @@
 <body>
 
 <header>
-  <h1>💊 Medikamente &amp; Tagebuch</h1>
+  <h1>💊 Medikamente &amp; Tagebuch <small style="font-size:12px;font-weight:400;opacity:.8">V6</small></h1>
   <div class="daybar">
     <button id="prevDay" aria-label="Vorheriger Tag">‹</button>
     <input type="date" id="day">
@@ -340,7 +340,7 @@
     changed(); renderMed();
   }
   function renderMed(){
-    const todays = db.intake.filter(e=>e.date===day).sort((a,b)=>a.time.localeCompare(b.time));
+    const todays = db.intake.filter(e=>e.date===day).reverse().sort((a,b)=>b.time.localeCompare(a.time));
     const quick = m=>{
       const n = todays.filter(e=>e.medId===m.id).length;
       return `<div class="medquick ${n?'done':''}">
@@ -392,7 +392,7 @@
     return `${fmtNum(e.count)} ${unit} ${e.type}${e.name?` (${e.name})`:''}`;
   }
   function renderAlk(){
-    const list = db.alcohol.filter(e=>e.date===day).sort((a,b)=>a.time.localeCompare(b.time));
+    const list = db.alcohol.filter(e=>e.date===day).reverse().sort((a,b)=>b.time.localeCompare(a.time));
     $('#alkList').innerHTML = list.length ? list.map(e=>`
       <div class="entry"><span class="t">${esc(e.time)}</span>
       <span class="x">${esc(alkText(e))}</span>
