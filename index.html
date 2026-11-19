@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6f6a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Medikamente</title>
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#fff; --ink:#1d2a29; --muted:#6b7a78; --line:#dde3e2;
+    --pri:#2f6f6a; --pri-soft:#e3efed; --warn:#b4542d; --warn-soft:#fbeee8; --ok:#3d8b4f;
+    --r:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#121817; --card:#1c2423; --ink:#e7eeed; --muted:#93a3a0; --line:#2c3735;
+      --pri:#5fb3aa; --pri-soft:#1f3532; --warn:#e08a63; --warn-soft:#3a2720; }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:17px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+  header{position:sticky;top:0;z-index:5;background:var(--pri);color:#fff;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 10px}
+  header h1{margin:0 0 6px;font-size:19px;font-weight:650}
+  .daybar{display:flex;align-items:center;gap:8px}
+  .daybar button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:10px;
+    width:44px;height:40px;font-size:20px}
+  .daybar input{flex:1;height:40px;border-radius:10px;border:0;padding:0 10px;font-size:17px;
+    background:#fff;color:#1d2a29}
+  .daylabel{font-size:14px;opacity:.85;margin-top:4px}
+  main{padding:14px 14px 150px}
+  section.tab{display:none} section.tab.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
+  .card h2{font-size:16px;margin:0 0 10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  label{display:block;font-size:14px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:46px}
+  textarea{min-height:90px;resize:vertical}
+  .row{display:flex;gap:10px} .row>*{flex:1}
+  .btn{display:block;width:100%;border:0;border-radius:12px;background:var(--pri);color:#fff;
+    font:inherit;font-weight:600;padding:13px;margin-top:14px;min-height:50px}
+  .btn.sec{background:var(--pri-soft);color:var(--pri)}
+  .btn.warn{background:var(--warn-soft);color:var(--warn)}
+  .medquick{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .medquick:last-child{border-bottom:0}
+  .medquick .nm{flex:1} .medquick .nm b{display:block} .medquick .nm small{color:var(--muted)}
+  .medquick button{border:0;border-radius:10px;background:var(--pri-soft);color:var(--pri);
+    font:inherit;font-weight:600;padding:10px 14px;min-height:44px}
+  .medquick.done button{background:var(--ok);color:#fff}
+  .entry{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .entry:last-child{border-bottom:0}
+  .entry .t{font-variant-numeric:tabular-nums;color:var(--muted);min-width:48px}
+  .entry .x{flex:1}
+  .entry .del{border:0;background:none;color:var(--warn);font-size:20px;width:40px;height:40px}
+  .empty{color:var(--muted);font-size:15px;padding:4px 0}
+  .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{flex:1;border:0;background:none;font:inherit;color:var(--ink);padding:11px;min-height:46px}
+  .seg button.on{background:var(--pri);color:#fff;font-weight:600}
+  .moods{display:flex;justify-content:space-between;gap:6px}
+  .moods button{flex:1;border:2px solid var(--line);background:var(--bg);border-radius:12px;
+    font-size:30px;padding:8px 0;min-height:64px}
+  .moods button.on{border-color:var(--pri);background:var(--pri-soft)}
+  .moodtext{text-align:center;color:var(--muted);font-size:14px;margin-top:6px;min-height:20px}
+  .histday{margin-bottom:14px}
+  .histday h3{margin:0 0 6px;font-size:16px}
+  .histday .line{font-size:15px;padding:2px 0}
+  .histday .lab{color:var(--muted)}
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;background:var(--card);
+    border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;border:0;background:none;font:inherit;font-size:12px;color:var(--muted);
+    padding:8px 0 9px;display:flex;flex-direction:column;align-items:center;gap:2px}
+  nav button span{font-size:22px}
+  nav button.on{color:var(--pri);font-weight:650}
+  #backupbar{position:fixed;left:10px;right:10px;z-index:7;
+    bottom:calc(66px + env(safe-area-inset-bottom));display:none;align-items:center;gap:10px;
+    background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);border-radius:12px;
+    padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+  #backupbar.show{display:flex}
+  #backupbar .msg{flex:1;font-size:15px}
+  #backupbar button{border:0;border-radius:10px;font:inherit;font-weight:600;min-height:42px;padding:8px 12px}
+  #backupbar .go{background:var(--warn);color:#fff}
+  #backupbar .later{background:none;color:var(--warn);padding:8px 6px}
+  #toast{position:fixed;left:50%;top:calc(110px + env(safe-area-inset-top));transform:translateX(-50%);
+    background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:20px;font-size:15px;
+    opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+  #toast.show{opacity:1}
+  .info{font-size:14px;color:var(--muted);margin-top:8px}
+  .medadmin{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .medadmin input{min-height:42px;padding:8px 10px}
+  .medadmin .n{flex:2} .medadmin .d{flex:1}
+  .medadmin button{border:0;background:var(--warn-soft);color:var(--warn);border-radius:10px;width:42px;height:42px;font-size:18px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💊 Medikamente &amp; Tagebuch</h1>
+  <div class="daybar">
+    <button id="prevDay" aria-label="Vorheriger Tag">‹</button>
+    <input type="date" id="day">
+    <button id="nextDay" aria-label="Nächster Tag">›</button>
+  </div>
+  <div class="daylabel" id="dayLabel"></div>
+</header>
+
+<main>
+  <!-- MEDIKAMENTE -->
+  <section class="tab active" id="tab-med">
+    <div class="card">
+      <h2>Schnell eintragen</h2>
+      <div id="medQuick"></div>
+      <div class="info">Tippen = jetzt eingenommen, mit der üblichen Dosis.</div>
+    </div>
+    <div class="card">
+      <h2>Einnahme eintragen</h2>
+      <label for="mSel">Medikament</label>
+      <select id="mSel"></select>
+      <div class="row">
+        <div><label for="mDose">Dosis (mg)</label><input id="mDose" type="number" inputmode="decimal" step="any" min="0"></div>
+        <div><label for="mTime">Uhrzeit</label><input id="mTime" type="time"></div>
+      </div>
+      <button class="btn" id="mSave">Einnahme speichern</button>
+    </div>
+    <div class="card">
+      <h2>Eingenommen an diesem Tag</h2>
+      <div id="medList"></div>
+    </div>
+  </section>
+
+  <!-- ALKOHOL -->
+  <section class="tab" id="tab-alk">
+    <div class="card">
+      <h2>Alkohol eintragen</h2>
+      <label for="aType">Getränk</label>
+      <select id="aType">
+        <option>Bier</option><option>Radler</option><option>Wein</option><option>Sekt</option>
+        <option>Schnaps</option><option>Likör</option><option>Whisky</option><option>Cocktail / Longdrink</option>
+        <option>Sonstiges</option>
+      </select>
+      <label for="aName">Genauer (optional)</label>
+      <input id="aName" placeholder="z. B. Krombacher, Riesling …">
+      <label>Menge</label>
+      <div class="seg" id="aUnit">
+        <button type="button" data-v="Glas" class="on">Glas</button>
+        <button type="button" data-v="Flasche">Flasche</button>
+      </div>
+      <div class="row">
+        <div><label for="aCount">Anzahl</label><input id="aCount" type="number" inputmode="decimal" step="0.5" min="0.5" value="1"></div>
+        <div><label for="aTime">Uhrzeit</label><input id="aTime" type="time"></div>
+      </div>
+      <button class="btn" id="aSave">Alkohol speichern</button>
+    </div>
+    <div class="card">
+      <h2>Getrunken an diesem Tag</h2>
+      <div id="alkList"></div>
+    </div>
+  </section>
+
+  <!-- BEFINDEN -->
+  <section class="tab" id="tab-mood">
+    <div class="card">
+      <h2>Wie geht es dir an diesem Tag?</h2>
+      <div class="moods" id="moods">
+        <button type="button" data-v="1">😣</button>
+        <button type="button" data-v="2">🙁</button>
+        <button type="button" data-v="3">😐</button>
+        <button type="button" data-v="4">🙂</button>
+        <button type="button" data-v="5">😄</button>
+      </div>
+      <div class="moodtext" id="moodText"></div>
+      <label for="moodNote">Notiz</label>
+      <textarea id="moodNote" placeholder="Wie hast du dich gefühlt? Schlaf, Schmerzen, Stimmung, Besonderes …"></textarea>
+      <button class="btn" id="moodSave">Befinden speichern</button>
+    </div>
+  </section>
+
+  <!-- VERLAUF -->
+  <section class="tab" id="tab-hist">
+    <div class="card">
+      <h2>Verlauf – letzte 30 Tage</h2>
+      <div id="hist"></div>
+    </div>
+  </section>
+
+  <!-- MEHR -->
+  <section class="tab" id="tab-more">
+    <div class="card">
+      <h2>Sicherung</h2>
+      <button class="btn" id="bkSave">💾 Backup jetzt speichern</button>
+      <div class="info" id="bkInfo"></div>
+      <button class="btn sec" id="bkLoad">📂 Backup laden</button>
+      <input type="file" id="bkFile" accept=".json,application/json" hidden>
+      <button class="btn sec" id="csvSave">📄 Als Tabelle (CSV) exportieren</button>
+      <div class="info">Die CSV-Datei kannst du z. B. ausdrucken oder dem Arzt mitbringen.</div>
+    </div>
+    <div class="card">
+      <h2>Meine Medikamente</h2>
+      <div id="medAdmin"></div>
+      <button class="btn sec" id="medAdd">+ Medikament hinzufügen</button>
+      <button class="btn" id="medAdminSave">Liste speichern</button>
+    </div>
+  </section>
+</main>
+
+<div id="backupbar">
+  <div class="msg" id="bbMsg"></div>
+  <button class="later" id="bbLater">Später</button>
+  <button class="go" id="bbGo">Sichern</button>
+</div>
+<div id="toast"></div>
+
+<nav>
+  <button data-tab="med" class="on"><span>💊</span>Medikamente</button>
+  <button data-tab="alk"><span>🍺</span>Alkohol</button>
+  <button data-tab="mood"><span>🙂</span>Befinden</button>
+  <button data-tab="hist"><span>📅</span>Verlauf</button>
+  <button data-tab="more"><span>⚙️</span>Mehr</button>
+</nav>
+
+<script>
+(() => {
+  const KEY = 'medtagebuch_v1';
+  const DEFAULT_MEDS = [
+    {id:'allopurinol', name:'Allopurinol', dose:100},
+    {id:'omeprazol',   name:'Omeprazol',   dose:20},
+    {id:'venlafaxin',  name:'Venlafaxin',  dose:75},
+    {id:'atorvastatin',name:'Atorvastatin',dose:10},
+    {id:'pipamperon',  name:'Pipamperon',  dose:40},
+    {id:'zopiclon',    name:'Zopiclon',    dose:7.5},
+    {id:'torasemid',   name:'Torasemid',   dose:10},
+    {id:'metamizol',   name:'Metamizol',   dose:500},
+  ];
+  const MOODS = {1:'Sehr schlecht',2:'Schlecht',3:'Mittel',4:'Gut',5:'Sehr gut'};
+  const MOOD_EMO = {1:'😣',2:'🙁',3:'😐',4:'🙂',5:'😄'};
+
+  // ---------- Speicher ----------
+  let db;
+  function load(){
+    try { db = JSON.parse(localStorage.getItem(KEY)); } catch(e){ db = null; }
+    if(!db || typeof db !== 'object') db = {};
+    db.meds   ??= DEFAULT_MEDS.slice();
+    db.intake ??= [];   // {id, date, time, medId, name, dose}
+    db.alcohol??= [];   // {id, date, time, type, name, unit, count}
+    db.mood   ??= {};   // date -> {score, note}
+    db.lastBackup ??= null;
+    db.changes ??= 0;
+  }
+  function persist(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+  // Nach jedem Speichern/Löschen: Hinweis aufs Backup zeigen
+  function changed(){ db.changes++; persist(); barDismissed = false; showBackupBar(); }
+
+  // ---------- Helfer ----------
+  const $ = s => document.querySelector(s);
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  const pad = n => String(n).padStart(2,'0');
+  const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const nowTime = () => { const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const fmtNum = n => String(n).replace('.', ',');
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function fmtDay(iso, long=true){
+    const [y,m,d] = iso.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    return dt.toLocaleDateString('de-DE', long ? {weekday:'long', day:'numeric', month:'long', year:'numeric'} : {weekday:'short', day:'2-digit', month:'2-digit'});
+  }
+  function toast(msg){
+    const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800);
+  }
+  const today = () => isoDate(new Date());
+  let day = today();
+
+  // ---------- Tag wählen ----------
+  function setDay(iso){
+    day = iso; $('#day').value = iso;
+    const t = today();
+    $('#dayLabel').textContent = fmtDay(iso) + (iso===t ? ' · heute' : '');
+    renderAll();
+  }
+  function shiftDay(n){
+    const [y,m,d] = day.split('-').map(Number);
+    setDay(isoDate(new Date(y, m-1, d+n)));
+  }
+  $('#prevDay').onclick = () => shiftDay(-1);
+  $('#nextDay').onclick = () => shiftDay(1);
+  $('#day').onchange = e => e.target.value && setDay(e.target.value);
+
+  // ---------- Reiter ----------
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on', x===b));
+    document.querySelectorAll('section.tab').forEach(s=>s.classList.toggle('active', s.id==='tab-'+b.dataset.tab));
+    if(b.dataset.tab==='hist') renderHist();
+    if(b.dataset.tab==='more') { renderBackupInfo(); renderMedAdmin(); }
+    window.scrollTo(0,0);
+  });
+
+  // ---------- Medikamente ----------
+  function renderMedSelect(){
+    const sel = $('#mSel'), cur = sel.value;
+    sel.innerHTML = db.meds.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} (${fmtNum(m.dose)} mg)</option>`).join('');
+    if(db.meds.some(m=>m.id===cur)) sel.value = cur;
+    syncDose();
+  }
+  function syncDose(){
+    const m = db.meds.find(x=>x.id===$('#mSel').value);
+    $('#mDose').value = m ? m.dose : '';
+  }
+  $('#mSel').onchange = syncDose;
+
+  function addIntake(med, dose, time){
+    db.intake.push({id:uid(), date:day, time, medId:med.id, name:med.name, dose:Number(dose)});
+    changed(); renderMed();
+  }
+  function renderMed(){
+    const todays = db.intake.filter(e=>e.date===day).sort((a,b)=>a.time.localeCompare(b.time));
+    $('#medQuick').innerHTML = db.meds.map(m=>{
+      const n = todays.filter(e=>e.medId===m.id).length;
+      return `<div class="medquick ${n?'done':''}">
+        <div class="nm"><b>${esc(m.name)}</b><small>${fmtNum(m.dose)} mg${n?` · ${n}× eingetragen`:''}</small></div>
+        <button data-id="${esc(m.id)}">${n?'✓ nochmal':'Eingenommen'}</button></div>`;
+    }).join('') || '<div class="empty">Keine Medikamente angelegt (unter „Mehr“).</div>';
+    $('#medQuick').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      const m = db.meds.find(x=>x.id===b.dataset.id);
+      addIntake(m, m.dose, day===today() ? nowTime() : ($('#mTime').value || '08:00'));
+      toast(`${m.name} eingetragen`);
+    });
+    $('#medList').innerHTML = todays.length ? todays.map(e=>`
+      <div class="entry"><span class="t">${esc(e.time)}</span>
+      <span class="x">${esc(e.name)} – ${fmtNum(e.dose)} mg</span>
+      <button class="del" data-id="${e.id}" aria-label="Löschen">🗑</button></div>`).join('')
+      : '<div class="empty">Noch nichts eingetragen.</div>';
+    $('#medList').querySelectorAll('.del').forEach(b=>b.onclick=()=>{
+      if(!confirm('Diesen Eintrag löschen?')) return;
+      db.intake = db.intake.filter(e=>e.id!==b.dataset.id); changed(); renderMed();
+    });
+  }
+  $('#mSave').onclick = () => {
+    const m = db.meds.find(x=>x.id===$('#mSel').value);
+    const dose = $('#mDose').value, time = $('#mTime').value || nowTime();
+    if(!m) return toast('Bitte Medikament wählen');
+    if(!(Number(dose) > 0)) return toast('Bitte Dosis angeben');
+    addIntake(m, dose, time); toast('Einnahme gespeichert'); syncDose();
+  };
+
+  // ---------- Alkohol ----------
+  let aUnit = 'Glas';
+  $('#aUnit').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    aUnit=b.dataset.v; $('#aUnit').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  });
+  $('#aSave').onclick = () => {
+    const count = Number($('#aCount').value);
+    if(!(count>0)) return toast('Bitte Anzahl angeben');
+    db.alcohol.push({id:uid(), date:day, time:$('#aTime').value || nowTime(),
+      type:$('#aType').value, name:$('#aName').value.trim(), unit:aUnit, count});
+    changed(); renderAlk(); toast('Alkohol gespeichert');
+    $('#aName').value=''; $('#aCount').value=1;
+  };
+  function alkText(e){
+    const unit = e.count===1 ? e.unit : (e.unit==='Glas' ? 'Gläser' : 'Flaschen');
+    return `${fmtNum(e.count)} ${unit} ${e.type}${e.name?` (${e.name})`:''}`;
+  }
+  function renderAlk(){
+    const list = db.alcohol.filter(e=>e.date===day).sort((a,b)=>a.time.localeCompare(b.time));
+    $('#alkList').innerHTML = list.length ? list.map(e=>`
+      <div class="entry"><span class="t">${esc(e.time)}</span>
+      <span class="x">${esc(alkText(e))}</span>
+      <button class="del" data-id="${e.id}" aria-label="Löschen">🗑</button></div>`).join('')
+      : '<div class="empty">Kein Alkohol eingetragen.</div>';
+    $('#alkList').querySelectorAll('.del').forEach(b=>b.onclick=()=>{
+      if(!confirm('Diesen Eintrag löschen?')) return;
+      db.alcohol = db.alcohol.filter(e=>e.id!==b.dataset.id); changed(); renderAlk();
+    });
+  }
+
+  // ---------- Befinden ----------
+  let moodScore = null;
+  function setMoodUI(score){
+    moodScore = score;
+    $('#moods').querySelectorAll('button').forEach(b=>b.classList.toggle('on', Number(b.dataset.v)===score));
+    $('#moodText').textContent = score ? MOODS[score] : 'Tippe auf ein Gesicht';
+  }
+  $('#moods').querySelectorAll('button').forEach(b=>b.onclick=()=>setMoodUI(Number(b.dataset.v)));
+  function renderMood(){
+    const m = db.mood[day];
+    setMoodUI(m ? m.score : null);
+    $('#moodNote').value = m ? (m.note||'') : '';
+  }
+  $('#moodSave').onclick = () => {
+    const note = $('#moodNote').value.trim();
+    if(!moodScore && !note) return toast('Bitte Gesicht wählen oder Notiz schreiben');
+    db.mood[day] = {score:moodScore, note};
+    changed(); toast('Befinden gespeichert');
+  };
+
+  // ---------- Verlauf ----------
+  function renderHist(){
+    const out = [];
+    const base = new Date();
+    for(let i=0;i<30;i++){
+      const iso = isoDate(new Date(base.getFullYear(), base.getMonth(), base.getDate()-i));
+      const meds = db.intake.filter(e=>e.date===iso).sort((a,b)=>a.time.localeCompare(b.time));
+      const alk = db.alcohol.filter(e=>e.date===iso).sort((a,b)=>a.time.localeCompare(b.time));
+      const mood = db.mood[iso];
+      if(!meds.length && !alk.length && !mood) continue;
+      out.push(`<div class="histday"><h3>${esc(fmtDay(iso,false))}${mood&&mood.score?' '+MOOD_EMO[mood.score]:''}</h3>
+        ${meds.map(e=>`<div class="line"><span class="lab">💊 ${esc(e.time)}</span> ${esc(e.name)} ${fmtNum(e.dose)} mg</div>`).join('')}
+        ${alk.length?`<div class="line"><span class="lab">🍺 </span>${alk.map(e=>esc(alkText(e))).join(' · ')}</div>`:''}
+        ${mood?`<div class="line"><span class="lab">🙂 </span>${mood.score?esc(MOODS[mood.score]):''}${mood.note?(mood.score?' – ':'')+esc(mood.note):''}</div>`:''}
+      </div>`);
+    }
+    $('#hist').innerHTML = out.join('') || '<div class="empty">Noch keine Einträge.</div>';
+  }
+
+  // ---------- Medikamente verwalten ----------
+  let adminDraft = [];
+  function renderMedAdmin(fromDraft=false){
+    if(!fromDraft) adminDraft = db.meds.map(m=>({...m}));
+    $('#medAdmin').innerHTML = adminDraft.map((m,i)=>`
+      <div class="medadmin">
+        <input class="n" data-i="${i}" data-f="name" value="${esc(m.name)}" placeholder="Name">
+        <input class="d" data-i="${i}" data-f="dose" type="number" inputmode="decimal" step="any" value="${m.dose}" placeholder="mg">
+        <button data-i="${i}" aria-label="Entfernen">✕</button>
+      </div>`).join('');
+    $('#medAdmin').querySelectorAll('input').forEach(inp=>inp.oninput=()=>{
+      adminDraft[inp.dataset.i][inp.dataset.f] = inp.dataset.f==='dose' ? Number(inp.value) : inp.value;
+    });
+    $('#medAdmin').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      adminDraft.splice(Number(b.dataset.i),1); renderMedAdmin(true);
+    });
+  }
+  $('#medAdd').onclick = () => { adminDraft.push({id:uid(), name:'', dose:0}); renderMedAdmin(true); };
+  $('#medAdminSave').onclick = () => {
+    const clean = adminDraft.filter(m=>m.name.trim()).map(m=>({...m, name:m.name.trim(), dose:Number(m.dose)||0}));
+    db.meds = clean; changed(); renderMedSelect(); renderMed(); renderMedAdmin(); toast('Medikamentenliste gespeichert');
+  };
+
+  // ---------- Backup ----------
+  let barDismissed = false;
+  function showBackupBar(){
+    if(db.changes<=0 || barDismissed){ $('#backupbar').classList.remove('show'); return; }
+    $('#bbMsg').textContent = `${db.changes} ${db.changes===1?'Änderung':'Änderungen'} seit der letzten Sicherung`;
+    $('#backupbar').classList.add('show');
+  }
+  // „Später“ blendet den Hinweis aus – beim nächsten Speichern kommt er wieder
+  $('#bbLater').onclick = () => { barDismissed = true; showBackupBar(); };
+  $('#bbGo').onclick = doBackup;
+  $('#bkSave').onclick = doBackup;
+
+  async function shareOrDownload(content, filename, mime){
+    const blob = new Blob([content], {type:mime});
+    const file = new File([blob], filename, {type:mime});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try { await navigator.share({files:[file], title:filename}); return true; }
+      catch(e){ if(e.name==='AbortError') return false; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    return true;
+  }
+  async function doBackup(){
+    const stamp = new Date();
+    const name = `Medikamente-Backup_${isoDate(stamp)}_${pad(stamp.getHours())}-${pad(stamp.getMinutes())}.json`;
+    const data = {app:'medtagebuch', version:1, exported:stamp.toISOString(),
+      meds:db.meds, intake:db.intake, alcohol:db.alcohol, mood:db.mood};
+    const ok = await shareOrDownload(JSON.stringify(data, null, 2), name, 'application/json');
+    if(ok){
+      db.lastBackup = stamp.toISOString(); db.changes = 0; persist();
+      showBackupBar(); renderBackupInfo(); toast('Backup gespeichert ✓');
+    }
+  }
+  function renderBackupInfo(){
+    $('#bkInfo').textContent = db.lastBackup
+      ? `Letzte Sicherung: ${new Date(db.lastBackup).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'})}` +
+        (db.changes ? ` · seitdem ${db.changes} ${db.changes===1?'Änderung':'Änderungen'}` : ' · alles gesichert')
+      : 'Noch keine Sicherung gemacht.';
+  }
+  $('#bkLoad').onclick = () => $('#bkFile').click();
+  $('#bkFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value=''; if(!f) return;
+    try{
+      const d = JSON.parse(await f.text());
+      if(d.app!=='medtagebuch') throw new Error('Keine Backup-Datei dieser App');
+      if(!confirm('Backup laden? Die aktuellen Daten in der App werden dadurch ersetzt.')) return;
+      db.meds=d.meds||[]; db.intake=d.intake||[]; db.alcohol=d.alcohol||[]; db.mood=d.mood||{};
+      db.changes=0; db.lastBackup = d.exported || new Date().toISOString(); persist();
+      renderMedSelect(); renderAll(); renderBackupInfo(); renderMedAdmin(); showBackupBar();
+      toast('Backup geladen ✓');
+    }catch(err){ alert('Die Datei konnte nicht geladen werden: ' + err.message); }
+  };
+  $('#csvSave').onclick = () => {
+    const q = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+    const rows = [['Datum','Uhrzeit','Art','Bezeichnung','Menge','Einheit','Befinden','Notiz']];
+    db.intake.forEach(e=>rows.push([e.date,e.time,'Medikament',e.name,fmtNum(e.dose),'mg','','']));
+    db.alcohol.forEach(e=>rows.push([e.date,e.time,'Alkohol',e.type+(e.name?' ('+e.name+')':''),fmtNum(e.count),e.unit,'','']));
+    Object.entries(db.mood).forEach(([d,m])=>rows.push([d,'','Befinden','','','',m.score?`${m.score} – ${MOODS[m.score]}`:'',m.note||'']));
+    rows.splice(1, rows.length, ...rows.slice(1).sort((a,b)=>(a[0]+a[1]).localeCompare(b[0]+b[1])));
+    const csv = '﻿' + rows.map(r=>r.map(q).join(';')).join('\r\n');
+    shareOrDownload(csv, `Medikamente-Tagebuch_${today()}.csv`, 'text/csv');
+  };
+
+  // ---------- Start ----------
+  function renderAll(){ renderMed(); renderAlk(); renderMood();
+    if($('#tab-hist').classList.contains('active')) renderHist(); }
+  load();
+  $('#mTime').value = nowTime(); $('#aTime').value = nowTime();
+  renderMedSelect();
+  setDay(today());
+  // Datum aktualisieren, wenn die App über Nacht offen bleibt
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState==='visible'){
+      $('#mTime').value = nowTime(); $('#aTime').value = nowTime();
+    }
+  });
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
