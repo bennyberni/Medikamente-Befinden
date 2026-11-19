@@ -450,11 +450,17 @@
 
   async function shareOrDownload(content, filename, mime){
     const blob = new Blob([content], {type:mime});
-    const file = new File([blob], filename, {type:mime});
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      try { await navigator.share({files:[file], title:filename}); return true; }
-      catch(e){ if(e.name==='AbortError') return false; }
+    // 1. Wenn der Browser es kann: „Speichern unter“-Dialog mit Ordnerwahl
+    if(window.showSaveFilePicker){
+      try{
+        const ext = filename.split('.').pop();
+        const h = await showSaveFilePicker({suggestedName:filename,
+          types:[{description: ext==='json'?'Backup':'Tabelle', accept:{[mime]:['.'+ext]}}]});
+        const w = await h.createWritable(); await w.write(blob); await w.close();
+        return true;
+      }catch(e){ if(e.name==='AbortError') return false; }
     }
+    // 2. Sonst normaler Download – fragt nach dem Ordner, wenn das in Chrome eingeschaltet ist
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
