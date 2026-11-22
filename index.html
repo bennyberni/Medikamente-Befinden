@@ -95,13 +95,25 @@
   .medadmin + .medadmin{border-top:1px solid var(--line);padding-top:8px}
   .grp{font-size:14px;font-weight:650;color:var(--pri);margin:6px 0 2px}
   .grp ~ .grp{margin-top:14px}
+  .kcalhero{display:flex;align-items:baseline;gap:8px}.kcalhero b{font-size:32px;color:var(--pri);font-variant-numeric:tabular-nums}.kcalhero span{color:var(--muted)}
+  details.meal{border-bottom:1px solid var(--line)} details.meal:last-child{border-bottom:0}
+  details.meal summary{list-style:none;display:flex;gap:10px;align-items:center;padding:11px 0;cursor:pointer}
+  details.meal summary::-webkit-details-marker{display:none}
+  details.meal summary .x{flex:1;min-width:0} details.meal summary .x b{display:block} details.meal summary .x small{color:var(--muted);display:block}
+  details.meal summary .k{font-weight:650;white-space:nowrap;font-variant-numeric:tabular-nums}
+  details.meal summary .ar{color:var(--muted);transition:transform .2s} details.meal[open] summary .ar{transform:rotate(90deg)}
+  details.meal .entry{padding-left:10px}
+  .entry .ed{border:0;background:none;font-size:19px;width:40px;height:40px}
+  .chipsq{display:flex;flex-wrap:wrap;gap:8px}
+  .chipsq button{border:0;border-radius:20px;background:var(--pri-soft);color:var(--pri);font:inherit;font-size:15px;font-weight:600;padding:9px 13px;min-height:42px}
+  nav button{font-size:11px}
   .medadmin button{border:0;background:var(--warn-soft);color:var(--warn);border-radius:10px;width:42px;height:42px;font-size:18px}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>💊 Medikamente &amp; Tagebuch <small style="font-size:12px;font-weight:400;opacity:.8">V6</small></h1>
+  <h1>💊 Medikamente &amp; Tagebuch <small style="font-size:12px;font-weight:400;opacity:.8">V7</small></h1>
   <div class="daybar">
     <button id="prevDay" aria-label="Vorheriger Tag">‹</button>
     <input type="date" id="day">
@@ -185,6 +197,34 @@
     </div>
   </section>
 
+  <!-- ESSEN -->
+  <section class="tab" id="tab-food">
+    <div class="card">
+      <h2>Essen an diesem Tag</h2>
+      <div class="kcalhero"><b id="fKcal">0</b><span>kcal</span><span id="fMeals" style="margin-left:auto;font-size:15px"></span></div>
+      <div id="foodList" style="margin-top:6px"></div>
+    </div>
+    <div class="card" id="fQuickCard">
+      <h2>Schnell eintragen</h2>
+      <div class="chipsq" id="fQuick"></div>
+    </div>
+    <div class="card">
+      <h2 id="fFormTitle">Essen eintragen</h2>
+      <div class="row">
+        <div><label for="fMeal">Mahlzeit</label><select id="fMeal"><option>Frühstück</option><option>Mittagessen</option><option>Abendessen</option><option>Snack</option></select></div>
+        <div><label for="fTime">Uhrzeit</label><input id="fTime" type="time"></div>
+      </div>
+      <label for="fName">Was hast du gegessen?</label>
+      <input id="fName" placeholder="z. B. Brötchen mit Käse" autocomplete="off">
+      <div class="row">
+        <div><label for="fAmt">Menge</label><input id="fAmt" placeholder="z. B. 1 Teller" autocomplete="off"></div>
+        <div><label for="fK">Kalorien (ca.)</label><input id="fK" type="number" inputmode="numeric" min="0" step="1" placeholder="kcal"></div>
+      </div>
+      <button class="btn" id="fSave">Essen speichern</button>
+      <button class="btn sec" id="fCancel" style="display:none">Abbrechen</button>
+    </div>
+  </section>
+
   <!-- VERLAUF -->
   <section class="tab" id="tab-hist">
     <div class="card">
@@ -225,6 +265,7 @@
   <button data-tab="med" class="on"><span>💊</span>Medikamente</button>
   <button data-tab="alk"><span>🍺</span>Alkohol</button>
   <button data-tab="mood"><span>🙂</span>Befinden</button>
+  <button data-tab="food"><span>🍽️</span>Essen</button>
   <button data-tab="hist"><span>📅</span>Verlauf</button>
   <button data-tab="more"><span>⚙️</span>Mehr</button>
 </nav>
@@ -267,6 +308,7 @@
     db.intake ??= [];   // {id, date, time, medId, name, dose, unit}
     db.alcohol??= [];   // {id, date, time, type, name, unit, count}
     db.mood   ??= {};   // date -> {score, note}
+    db.food   ??= [];   // {id, date, time, meal, name, amount, kcal}
     db.lastBackup ??= null;
     db.changes ??= 0;
   }
@@ -433,6 +475,78 @@
     changed(); renderMoodSaved(); toast('Befinden gespeichert'); window.scrollTo({top:0,behavior:'smooth'});
   };
 
+  // ---------- Essen ----------
+  const MEALS = ['Frühstück','Mittagessen','Abendessen','Snack'];
+  const MEAL_EMO = {'Frühstück':'🥐','Mittagessen':'🍲','Abendessen':'🍽️','Snack':'🍎'};
+  const mealFor = t => { const h = Number(String(t||nowTime()).slice(0,2)); return h<10?'Frühstück':h<11?'Snack':h<14?'Mittagessen':h<17?'Snack':h<21?'Abendessen':'Snack'; };
+  const kcalTxt = n => Math.round(n).toLocaleString('de-DE');
+  let foodEdit = null; const foodOpen = new Set();
+  function dayFood(iso){ return db.food.filter(e=>e.date===iso).sort((a,b)=>a.time.localeCompare(b.time)); }
+  function mealGroups(iso){
+    const list = dayFood(iso), groups = [];
+    MEALS.concat([...new Set(list.map(e=>e.meal))].filter(m=>!MEALS.includes(m))).forEach(m=>{
+      const items = list.filter(e=>e.meal===m); if(items.length) groups.push({meal:m, items, kcal:items.reduce((a,e)=>a+(Number(e.kcal)||0),0)});
+    });
+    return groups;
+  }
+  function renderFood(){
+    const groups = mealGroups(day), tot = groups.reduce((a,g)=>a+g.kcal,0);
+    $('#fKcal').textContent = kcalTxt(tot);
+    $('#fMeals').textContent = groups.length ? `${groups.length} ${groups.length===1?'Mahlzeit':'Mahlzeiten'}` : '';
+    $('#foodList').innerHTML = groups.length ? groups.map(g=>{
+      const t1=g.items[0].time, t2=g.items[g.items.length-1].time;
+      return `<details class="meal" data-meal="${esc(g.meal)}"${foodOpen.has(g.meal)?' open':''}><summary>
+        <span style="font-size:22px">${MEAL_EMO[g.meal]||'🍴'}</span>
+        <span class="x"><b>${esc(g.meal)}: ${g.items.map(e=>esc(e.name)).join(', ')}</b><small>${esc(t1)}${t2!==t1?'–'+esc(t2):''} Uhr</small></span>
+        <span class="k">${kcalTxt(g.kcal)} kcal</span><span class="ar">›</span></summary>
+        ${g.items.map(e=>`<div class="entry"><span class="t">${esc(e.time)}</span>
+          <span class="x">${esc(e.name)}${e.amount?` <small style="color:var(--muted)">· ${esc(e.amount)}</small>`:''}<br><small style="color:var(--muted)">${e.kcal?kcalTxt(e.kcal)+' kcal':'ohne Kalorien'}</small></span>
+          <button class="ed" data-id="${e.id}" aria-label="Bearbeiten">✏️</button>
+          <button class="del" data-id="${e.id}" aria-label="Löschen">🗑</button></div>`).join('')}
+      </details>`}).join('') : '<div class="empty">Noch nichts gegessen eingetragen.</div>';
+    $('#foodList').querySelectorAll('details').forEach(d=>d.ontoggle=()=>{ d.open?foodOpen.add(d.dataset.meal):foodOpen.delete(d.dataset.meal); });
+    $('#foodList').querySelectorAll('.del').forEach(b=>b.onclick=()=>{
+      if(!confirm('Diesen Eintrag löschen?')) return;
+      db.food = db.food.filter(e=>e.id!==b.dataset.id); if(foodEdit===b.dataset.id) foodFormReset(); changed(); renderFood();
+    });
+    $('#foodList').querySelectorAll('.ed').forEach(b=>b.onclick=()=>{
+      const e = db.food.find(x=>x.id===b.dataset.id); if(!e) return;
+      foodEdit = e.id; $('#fMeal').value = e.meal; $('#fTime').value = e.time; $('#fName').value = e.name;
+      $('#fAmt').value = e.amount||''; $('#fK').value = e.kcal||'';
+      $('#fFormTitle').textContent = 'Eintrag bearbeiten'; $('#fSave').textContent = 'Änderung speichern'; $('#fCancel').style.display='block';
+      $('#fName').scrollIntoView({behavior:'smooth', block:'center'});
+    });
+    renderFoodQuick();
+  }
+  function renderFoodQuick(){
+    const cnt = {};
+    db.food.forEach(e=>{ const k=e.name.trim().toLowerCase(); if(!k) return; (cnt[k] ||= {n:0, e}).n++; if(e.date>=cnt[k].e.date) cnt[k].e=e; });
+    const top = Object.values(cnt).sort((a,b)=>b.n-a.n || b.e.date.localeCompare(a.e.date)).slice(0,10);
+    $('#fQuickCard').style.display = top.length ? '' : 'none';
+    $('#fQuick').innerHTML = top.map((x,i)=>`<button data-i="${i}">${esc(x.e.name)}${x.e.kcal?` · ${kcalTxt(x.e.kcal)}`:''}</button>`).join('');
+    $('#fQuick').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      const e = top[Number(b.dataset.i)].e; foodFormReset();
+      $('#fName').value = e.name; $('#fAmt').value = e.amount||''; $('#fK').value = e.kcal||'';
+      $('#fName').scrollIntoView({behavior:'smooth', block:'center'}); toast('Prüfen und speichern');
+    });
+  }
+  function foodFormReset(){
+    foodEdit = null; const t = nowTime(); $('#fTime').value = t; $('#fMeal').value = mealFor(t);
+    $('#fName').value=''; $('#fAmt').value=''; $('#fK').value='';
+    $('#fFormTitle').textContent = 'Essen eintragen'; $('#fSave').textContent = 'Essen speichern'; $('#fCancel').style.display='none';
+  }
+  $('#fTime').onchange = () => { if(!foodEdit) $('#fMeal').value = mealFor($('#fTime').value); };
+  $('#fCancel').onclick = foodFormReset;
+  $('#fSave').onclick = () => {
+    const name = $('#fName').value.trim(); if(!name) return toast('Bitte eintragen, was du gegessen hast');
+    const k = Number(String($('#fK').value).replace(',','.')); 
+    const rec = {date:day, time:$('#fTime').value||nowTime(), meal:$('#fMeal').value, name, amount:$('#fAmt').value.trim(), kcal: k>0?Math.round(k):0};
+    if(foodEdit){ const e=db.food.find(x=>x.id===foodEdit); if(e){ Object.assign(e, rec, {date:e.date}); } }
+    else db.food.push({id:uid(), ...rec});
+    const wasEdit = !!foodEdit; if(wasEdit) foodOpen.add(rec.meal); foodFormReset();
+    changed(); renderFood(); toast(wasEdit?'Änderung gespeichert':'Essen gespeichert'); window.scrollTo({top:0,behavior:'smooth'});
+  };
+
   // ---------- Verlauf ----------
   function renderHist(){
     const out = [];
@@ -442,10 +556,13 @@
       const meds = db.intake.filter(e=>e.date===iso).sort((a,b)=>a.time.localeCompare(b.time));
       const alk = db.alcohol.filter(e=>e.date===iso).sort((a,b)=>a.time.localeCompare(b.time));
       const mood = db.mood[iso];
-      if(!meds.length && !alk.length && !mood) continue;
+      const fg = mealGroups(iso), fk = fg.reduce((a,g)=>a+g.kcal,0);
+      if(!meds.length && !alk.length && !mood && !fg.length) continue;
       out.push(`<div class="histday"><h3>${esc(fmtDay(iso,false))}${mood&&mood.score?' '+MOOD_EMO[mood.score]:''}</h3>
         ${meds.map(e=>`<div class="line"><span class="lab">💊 ${esc(e.time)}</span> ${esc(e.name)} ${amount(e.dose, e.unit||'mg')}</div>`).join('')}
         ${alk.length?`<div class="line"><span class="lab">🍺 </span>${alk.map(e=>esc(alkText(e))).join(' · ')}</div>`:''}
+        ${fg.map(g=>`<div class="line"><span class="lab">${MEAL_EMO[g.meal]||'🍴'} ${esc(g.meal)}:</span> ${g.items.map(e=>esc(e.name)).join(', ')}${g.kcal?` <span class="lab">(${kcalTxt(g.kcal)} kcal)</span>`:''}</div>`).join('')}
+        ${fg.length&&fk?`<div class="line"><span class="lab">Σ Kalorien:</span> <b>${kcalTxt(fk)} kcal</b></div>`:''}
         ${mood?`<div class="line"><span class="lab">🙂 </span>${mood.score?esc(MOODS[mood.score]):''}${mood.note?(mood.score?' – ':'')+esc(mood.note):''}</div>`:''}
       </div>`);
     }
@@ -512,7 +629,7 @@
     const stamp = new Date();
     const name = `Medikamente-Backup_${isoDate(stamp)}_${pad(stamp.getHours())}-${pad(stamp.getMinutes())}.json`;
     const data = {app:'medtagebuch', version:1, exported:stamp.toISOString(),
-      meds:db.meds, intake:db.intake, alcohol:db.alcohol, mood:db.mood};
+      meds:db.meds, intake:db.intake, alcohol:db.alcohol, mood:db.mood, food:db.food};
     const ok = await shareOrDownload(JSON.stringify(data, null, 2), name, 'application/json');
     if(ok){
       db.lastBackup = stamp.toISOString(); db.changes = 0; persist();
@@ -530,9 +647,19 @@
     const f = e.target.files[0]; e.target.value=''; if(!f) return;
     try{
       const d = JSON.parse(await f.text());
+      // Backup aus der Essens-App: Einträge hinzufügen
+      if(d && (d.app==='essen' || Array.isArray(d)) ){
+        const arr = (Array.isArray(d)?d:d.entries||[]).filter(e=>e&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&(e.food||e.name));
+        const have = new Set(db.food.map(e=>e.date+'|'+e.time+'|'+e.name));
+        const add = arr.map(e=>({id:uid(), date:e.date, time:e.time||'12:00', meal:MEALS.includes(e.meal)?e.meal:(e.meal==='Snacks'?'Snack':mealFor(e.time)), name:String(e.food||e.name).trim(), amount:String(e.amount||''), kcal:Math.round(Number(e.kcal)||0)}))
+          .filter(e=>!have.has(e.date+'|'+e.time+'|'+e.name));
+        if(!add.length) return toast('Keine neuen Essens-Einträge in der Datei');
+        if(!confirm(`${add.length} Essens-Einträge aus der Essens-App hinzufügen? Deine übrigen Daten bleiben unverändert.`)) return;
+        db.food.push(...add); changed(); renderAll(); toast(`${add.length} Essens-Einträge übernommen ✓`); return;
+      }
       if(d.app!=='medtagebuch') throw new Error('Keine Backup-Datei dieser App');
       if(!confirm('Backup laden? Die aktuellen Daten in der App werden dadurch ersetzt.')) return;
-      db.meds=d.meds||[]; db.intake=d.intake||[]; db.alcohol=d.alcohol||[]; db.mood=d.mood||{};
+      db.meds=d.meds||[]; db.intake=d.intake||[]; db.alcohol=d.alcohol||[]; db.mood=d.mood||{}; db.food=d.food||[];
       db.changes=0; db.lastBackup = d.exported || new Date().toISOString(); persist();
       renderMedSelect(); renderAll(); renderBackupInfo(); renderMedAdmin(); showBackupBar();
       toast('Backup geladen ✓');
@@ -543,6 +670,7 @@
     const rows = [['Datum','Uhrzeit','Art','Bezeichnung','Menge','Einheit','Befinden','Notiz']];
     db.intake.forEach(e=>{ const m=db.meds.find(x=>x.id===e.medId); rows.push([e.date,e.time,m&&m.kind==='supp'?'Supplement':'Medikament',e.name,fmtNum(e.dose),e.unit||'mg','','']); });
     db.alcohol.forEach(e=>rows.push([e.date,e.time,'Alkohol',e.type+(e.name?' ('+e.name+')':''),fmtNum(e.count),e.unit,'','']));
+    db.food.forEach(e=>rows.push([e.date,e.time,'Essen – '+e.meal,e.name+(e.amount?' ('+e.amount+')':''),e.kcal||'','kcal','','']));
     Object.entries(db.mood).forEach(([d,m])=>rows.push([d,'','Befinden','','','',m.score?`${m.score} – ${MOODS[m.score]}`:'',m.note||'']));
     rows.splice(1, rows.length, ...rows.slice(1).sort((a,b)=>(a[0]+a[1]).localeCompare(b[0]+b[1])));
     const csv = '﻿' + rows.map(r=>r.map(q).join(';')).join('\r\n');
@@ -550,16 +678,16 @@
   };
 
   // ---------- Start ----------
-  function renderAll(){ renderMed(); renderAlk(); renderMood();
+  function renderAll(){ renderMed(); renderAlk(); renderMood(); renderFood();
     if($('#tab-hist').classList.contains('active')) renderHist(); }
   load();
-  $('#mTime').value = nowTime(); $('#aTime').value = nowTime();
+  $('#mTime').value = nowTime(); $('#aTime').value = nowTime(); foodFormReset();
   renderMedSelect();
   setDay(today());
   // Datum aktualisieren, wenn die App über Nacht offen bleibt
   document.addEventListener('visibilitychange', () => {
     if(document.visibilityState==='visible'){
-      $('#mTime').value = nowTime(); $('#aTime').value = nowTime();
+      $('#mTime').value = nowTime(); $('#aTime').value = nowTime(); if(!foodEdit && !$('#fName').value) foodFormReset();
     }
   });
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
