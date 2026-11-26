@@ -1,5 +1,5 @@
 // Offline-Unterstützung: App-Dateien zwischenspeichern
-const CACHE = 'medtagebuch-v5';
+const CACHE = 'medtagebuch-v8';
 const FILES = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {
