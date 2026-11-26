@@ -1,6 +1,6 @@
 {
-  "name": "Medikamente & Tagebuch",
-  "short_name": "Medikamente",
+  "name": "Mein Gesundheitstagebuch",
+  "short_name": "Gesundheit",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
